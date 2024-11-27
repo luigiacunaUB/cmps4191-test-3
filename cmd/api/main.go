@@ -16,7 +16,7 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
-	//"github.com/luigiacunaUB/cmps4191-test-3/internal/data"
+	"github.com/luigiacunaUB/cmps4191-test-3/internal/data"
 )
 
 const appVersion = "1.0.0"
@@ -40,6 +40,7 @@ type applicationDependencies struct {
 	//Add Models for various tables (also dont foreget to add DB conn to each )
 	//ProductModel data.ProductModel
 	//ReviewModel  data.ReviewModel
+	BookModel data.BookModel
 }
 
 func main() {
@@ -48,7 +49,7 @@ func main() {
 	//Settings ports and enviroment info
 	flag.IntVar(&settings.port, "port", 4000, "Server Port")
 	flag.StringVar(&settings.enviroment, "env", "development", "Enviroment(development|staging|)")
-	flag.StringVar(&settings.db.dsn, "db-dsn", "postgres://admin:password123@localhost/amazon?sslmode=disable", "PostgreSQL DSN")
+	flag.StringVar(&settings.db.dsn, "db-dsn", "postgres://bookadmin:admin123@localhost/bookstore?sslmode=disable", "PostgreSQL DSN")
 
 	flag.Float64Var(&settings.limiter.rps, "limiter-rps", 2, "Rate Limiter maximum requests per second")
 	flag.IntVar(&settings.limiter.burst, "limiter-burst", 5, "Rate Limiter maximum burst")
@@ -71,6 +72,7 @@ func main() {
 		logger: logger,
 		//ProductModel: data.ProductModel{DB: db},
 		//ReviewModel:  data.ReviewModel{DB: db},
+		BookModel: data.BookModel{DB: db},
 	}
 
 	err = appInstance.serve()
