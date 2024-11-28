@@ -21,7 +21,7 @@ func (a *applicationDependencies) routes() http.Handler {
 	router.HandlerFunc(http.MethodGet, "/", a.Index)                            //root page
 	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", a.healthCheckHandler) //healthcheck
 	//-------------------------------------BOOKS------------------------------------------------
-	//router.HandlerFunc(http.MethodGet,"/api/v1/books",a.)
+	router.HandlerFunc(http.MethodPost, "/api/v1/books", a.AddBookHandler)
 
 	return a.recoverPanic(a.rateLimit(router))
 }
