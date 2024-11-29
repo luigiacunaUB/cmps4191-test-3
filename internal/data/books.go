@@ -377,5 +377,72 @@ func (b BookModel) DeleteBook(id int64) error {
 	return tx.Commit()
 
 }
-//-------------------------------------------------------------------------------------------------------------------------------------------
-func (b BookModel) ListAllBooks()(error)
+
+// -------------------------------------------------------------------------------------------------------------------------------------------
+func (b BookModel) ListAllBooks() ([]Book, error) {
+	// query to display all details of books
+	query := `SELECT 
+    	b.id AS book_id,
+    	b.title,
+    	b.isbn,
+    	b.publication_date,
+    	b.genre,
+    	b.description,
+    	b.average_rating,
+    	ARRAY_AGG(a.name) AS authors
+	FROM 
+    	books b
+	LEFT JOIN 
+    	book_authors ba ON b.id = ba.book_id
+	LEFT JOIN 
+    	authors a ON ba.author_id = a.id
+	GROUP BY 
+    	b.id, b.title, b.isbn, b.publication_date, b.genre, b.description, b.average_rating
+	ORDER BY 
+    	b.id;
+`
+
+	// Execute the query
+	rows, err := b.DB.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Prepare a slice to hold the books
+	var books []Book
+
+	// Iterate through the result set
+	for rows.Next() {
+		var book Book
+		var authors []string
+
+		// Scan the row into the book and authors variables
+		err := rows.Scan(
+			&book.ID,
+			&book.Title,
+			&book.ISBN,
+			&book.PublicationDate,
+			&book.Genre,
+			&book.Description,
+			&book.AverageRating,
+			pq.Array(&authors),
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// Assign authors to the book
+		book.Authors = authors
+
+		// Append the book to the slice
+		books = append(books, book)
+	}
+
+	// Check for errors during iteration
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return books, nil
+}

@@ -264,4 +264,14 @@ func (a *applicationDependencies) ListBookHandler(w http.ResponseWriter, r *http
 // -----------------------------------------------------------------------------------------------------------------------------------
 func (a *applicationDependencies) ListAllHandler(w http.ResponseWriter, r *http.Request) {
 
+	result, err := a.BookModel.ListAllBooks()
+	if err != nil {
+		a.serverErrorResponse(w, r, err)
+	}
+
+	err = a.writeJSON(w, http.StatusOK, envelope{"books": result}, nil)
+	if err != nil {
+		a.serverErrorResponse(w, r, err)
+	}
+
 }
