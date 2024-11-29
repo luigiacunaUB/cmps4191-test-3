@@ -164,13 +164,13 @@ func (a *applicationDependencies) UpdateBookHandler(w http.ResponseWriter, r *ht
 		Genre           string    `json:"genre"`
 		Description     string    `json:"description"`
 	}
-
+	//make sure the JSON is within spec
 	err = a.readJSON(w, r, &incomingData)
 	if err != nil {
 		a.badRequestResponse(w, r, err)
 		return
 	}
-
+	//if no changes remain the same, if yes make it match the incoming data
 	if incomingData.Title != "" {
 		book.Title = incomingData.Title
 	}
@@ -207,6 +207,7 @@ func (a *applicationDependencies) UpdateBookHandler(w http.ResponseWriter, r *ht
 
 // --------------------------------------------------------------------------------------------------------------------------------
 func (a *applicationDependencies) DeleteBookHandler(w http.ResponseWriter, r *http.Request) {
+	//get the ID
 	id, err := a.readIDParam(r)
 	if err != nil {
 		a.notFoundResponse(w, r)
@@ -263,7 +264,7 @@ func (a *applicationDependencies) ListBookHandler(w http.ResponseWriter, r *http
 
 // -----------------------------------------------------------------------------------------------------------------------------------
 func (a *applicationDependencies) ListAllHandler(w http.ResponseWriter, r *http.Request) {
-
+	//struct for the Filters
 	var queryParametersData struct {
 		data.Filters
 	}
@@ -271,12 +272,12 @@ func (a *applicationDependencies) ListAllHandler(w http.ResponseWriter, r *http.
 	queryParameters := r.URL.Query()
 
 	v := validator.New()
-
+	//setting parameters for the pagination and sorting
 	queryParametersData.Filters.Page = a.getSingleIntegerParameter(queryParameters, "page", 1, v)
 	queryParametersData.Filters.PageSize = a.getSingleIntegerParameter(queryParameters, "page_size", 10, v)
 
 	queryParametersData.Filters.Sort = a.getSingleQueryParameter(queryParameters, "sort", "id")
-	queryParametersData.Filters.SortSafeList = []string{"id", "category", "-id", "-category"}
+	queryParametersData.Filters.SortSafeList = []string{"id", "genre", "-id", "-genre"}
 
 	data.ValidateFilters(v, queryParametersData.Filters)
 	if !v.IsEmpty() {

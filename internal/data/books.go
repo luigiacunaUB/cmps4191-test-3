@@ -3,6 +3,7 @@ package data
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"strings"
@@ -322,22 +323,37 @@ func (b BookModel) UpdateBook(book Book) error {
 		book.ID,
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to update book: %w", err)
 	}
 
 	// Delete existing authors for the book in the `book_authors` table.
 	_, err = tx.Exec(`DELETE FROM book_authors WHERE book_id = $1`, book.ID)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to delete existing authors: %w", err)
 	}
 
 	// Insert new authors into the `book_authors` table.
 	for _, author := range book.Authors {
-		_, err = tx.Exec(`INSERT INTO book_authors (book_id, author_id)
-		                  SELECT $1, id FROM authors WHERE name = $2`,
-			book.ID, author)
+		// Check if the author exists in the authors table.
+		var authorID int64
+		err = tx.QueryRow(`SELECT id FROM authors WHERE name = $1`, author).Scan(&authorID)
+
+		if err == sql.ErrNoRows {
+			// If the author doesn't exist, insert the author into the authors table.
+			// Insert the author into the authors table.
+			err = tx.QueryRow(`INSERT INTO authors (name) VALUES ($1) RETURNING id`, author).Scan(&authorID)
+			if err != nil {
+				return fmt.Errorf("failed to insert new author '%s': %w", author, err)
+			}
+		} else if err != nil {
+			return fmt.Errorf("failed to check if author exists: %w", err)
+		}
+
+		// Insert the author-book association into the `book_authors` table.
+		_, err = tx.Exec(`INSERT INTO book_authors (book_id, author_id) VALUES ($1, $2)`,
+			book.ID, authorID)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to associate author '%s' with book: %w", author, err)
 		}
 	}
 
@@ -381,7 +397,7 @@ func (b BookModel) DeleteBook(id int64) error {
 // -------------------------------------------------------------------------------------------------------------------------------------------
 func (b BookModel) ListAllBooks(filters Filters) ([]Book, MetaData, error) {
 	// query to display all details of books
-	query := `SELECT COUNT (*) OVER (),
+	query := fmt.Sprintf(`SELECT COUNT (*) OVER (),
     	b.id AS book_id,
     	b.title,
     	b.isbn,
@@ -399,9 +415,8 @@ func (b BookModel) ListAllBooks(filters Filters) ([]Book, MetaData, error) {
 	GROUP BY 
     	b.id, b.title, b.isbn, b.publication_date, b.genre, b.description, b.average_rating
 	ORDER BY 
-    	b.id
-	LIMIT $1 OFFSET $2;
-`
+    	b.%s %s
+	LIMIT $1 OFFSET $2;`, filters.sortColumn(), filters.sortDirection())
 
 	// Execute the query
 	rows, err := b.DB.Query(query, filters.limit(), filters.offset())
