@@ -27,6 +27,7 @@ func (a *applicationDependencies) routes() http.Handler {
 	router.HandlerFunc(http.MethodDelete, "/api/v1/books/:id", a.DeleteBookHandler) //Delete a book
 	router.HandlerFunc(http.MethodGet, "/api/v1/book/:id", a.ListBookHandler)       //list a single book
 	router.HandlerFunc(http.MethodGet, "/api/v1/books", a.ListAllHandler)           //list all books
-
+	//--------------------------------------USERS-------------------------------------------------
+	router.HandlerFunc(http.MethodPost, "/v1/users", a.registerUserHandler)
 	return a.recoverPanic(a.rateLimit(router))
 }

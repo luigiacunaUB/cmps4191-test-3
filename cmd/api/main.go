@@ -35,12 +35,10 @@ type serverConfig struct {
 }
 
 type applicationDependencies struct {
-	config serverConfig
-	logger *slog.Logger
-	//Add Models for various tables (also dont foreget to add DB conn to each )
-	//ProductModel data.ProductModel
-	//ReviewModel  data.ReviewModel
+	config    serverConfig
+	logger    *slog.Logger
 	BookModel data.BookModel
+	UserModel data.UserModel
 }
 
 func main() {
@@ -68,11 +66,10 @@ func main() {
 	logger.Info("database connection pool established")
 
 	appInstance := &applicationDependencies{
-		config: settings,
-		logger: logger,
-		//ProductModel: data.ProductModel{DB: db},
-		//ReviewModel:  data.ReviewModel{DB: db},
+		config:    settings,
+		logger:    logger,
 		BookModel: data.BookModel{DB: db},
+		UserModel: data.UserModel{DB: db},
 	}
 
 	err = appInstance.serve()
