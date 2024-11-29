@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/luigiacunaUB/cmps4191-test-3/internal/data"
@@ -12,6 +14,8 @@ import (
 // ------------------------------------------------------------------------------------------
 func (a *applicationDependencies) AddBookHandler(w http.ResponseWriter, r *http.Request) {
 	//set the data coming from the curl command
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	logger.Info("Inside AddBookHandler 1")
 	var incomingData struct {
 		Title           string    `json:"title"`
 		Authors         []string  `json:"authors"`
@@ -45,24 +49,36 @@ func (a *applicationDependencies) AddBookHandler(w http.ResponseWriter, r *http.
 	}
 
 	//search for title if it exist to prevent duplication
-	var results []data.Book
-	titleSearch := data.Book{Title: book.Title}
-	results, err = a.BookModel.SearchDatabase(titleSearch)
+	var preResults []data.Book
+	titleSearch := data.Book{Title: book.Title, Authors: book.Authors, Genre: book.Genre}
+	logger.Info("Just before SearchDatabase Title Search")
+	preResults, err = a.BookModel.SearchDatabase(titleSearch)
 	if err != nil {
 		a.serverErrorResponse(w, r, err)
 		return
 	}
 
-	//If title is found, return error
-	if len(results) > 0 {
-		a.errorResponseJSON(w, r, http.StatusConflict, "A book with this title exist")
+	//extracting only the title portion of preResults
+	titles := make([]string, len(preResults))
+	for i, book := range preResults {
+		titles[i] = book.Title
 	}
+	logger.Info("Results Titles", slog.Any("titles", titles))
 
+	//If title is found, return error
+	for _, title := range titles {
+		if title == incomingData.Title {
+			a.errorResponseJSON(w, r, http.StatusConflict, "A book with this title already exists")
+			return
+		}
+	}
 	//if no book is found go ahead with addition
-	err = a.BookModel.AddBookToDatabase(*book)
+	logger.Info("Just Before AddBookToDatabase")
+	bookID, err := a.BookModel.AddBookToDatabase(*book)
 	if err != nil {
 		a.serverErrorResponse(w, r, err)
 	}
+	book.ID = bookID
 
 	//create the headers
 	fmt.Fprintf(w, "%+v\n", incomingData)
@@ -71,13 +87,14 @@ func (a *applicationDependencies) AddBookHandler(w http.ResponseWriter, r *http.
 	headers.Set("Location", fmt.Sprintf("/api/v1/books/%d", book.ID))
 
 	data := envelope{
-		`json:"title"`:            book.Title,
-		`json:"authors"`:          book.Authors,
-		`json:"isbn"`:             book.ISBN,
-		`json:"publication_date"`: book.PublicationDate,
-		`json:"genre"`:            book.Genre,
-		`json:"description"`:      book.Description,
-		`json:"average_rating"`:   book.AverageRating,
+		"Location: /api/v1/books/": book.ID,
+		"Title":                    book.Title,
+		"Authors":                  book.Authors,
+		"ISBN":                     book.ISBN,
+		"Publication Date":         book.PublicationDate,
+		"Genre":                    book.Genre,
+		"Description":              book.Description,
+		"Average Rating":           book.AverageRating,
 	}
 
 	err = a.writeJSON(w, http.StatusCreated, data, headers)

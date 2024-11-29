@@ -3,6 +3,8 @@ package data
 import (
 	"database/sql"
 	"errors"
+	"log/slog"
+	"os"
 	"time"
 
 	"github.com/lib/pq"
@@ -58,16 +60,19 @@ func ValidateBook(v *validator.Validator, b BookModel, book *Book) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-func (b BookModel) AddBookToDatabase(book Book) error {
+func (b BookModel) AddBookToDatabase(book Book) (int64, error) {
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	logger.Info("Inside AddBookToDatabase")
 
 	// Begin a transaction
 	tx, err := b.DB.Begin()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	// Insert the book into the books table
-	var bookID int
+	var bookID int64
 	err = tx.QueryRow(
 		`INSERT INTO books (title, isbn, publication_date, genre, description, average_rating) 
 		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
@@ -75,9 +80,9 @@ func (b BookModel) AddBookToDatabase(book Book) error {
 	).Scan(&bookID)
 	if err != nil {
 		tx.Rollback()
-		return err
+		return 0, err
 	}
-
+	logger.Info("Finished Adding book pushing into authors")
 	// Insert authors and the book-author relationship
 	for _, author := range book.Authors {
 		var authorID int
@@ -92,14 +97,14 @@ func (b BookModel) AddBookToDatabase(book Book) error {
 				).Scan(&authorID)
 				if err != nil {
 					tx.Rollback()
-					return err
+					return 0, err
 				}
 			} else {
 				tx.Rollback()
-				return err
+				return 0, err
 			}
 		}
-
+		logger.Info("Finished insert authors")
 		// Insert the relationship into the book_authors table
 		_, err = tx.Exec(
 			`INSERT INTO book_authors (book_id, author_id) VALUES ($1, $2)`,
@@ -107,27 +112,54 @@ func (b BookModel) AddBookToDatabase(book Book) error {
 		)
 		if err != nil {
 			tx.Rollback()
-			return err
+			return 0, err
 		}
 	}
 
 	// Commit the transaction
 	if err := tx.Commit(); err != nil {
-		return err
+		return 0, err
 	}
 
-	return nil
+	return bookID, nil
 }
 
 // --------------------------------------------------------------------------------------------------------------------
 func (b BookModel) SearchDatabase(search Book) ([]Book, error) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	logger.Info("Inside Search Database, starting search")
+	//checking if results passed are ok
+	logger.Info("Title to be Searched", search.Title)
+	logger.Info("Author to be Searched", search.Authors)
+	logger.Info("Genre to be Searched", search.Genre)
+
 	query := `
-		SELECT id, title, authors, isbn, publication_date, genre, description, average_rating
-		FROM books
-		WHERE 
-			($1 = '' OR title ILIKE '%' || $1 || '%') AND
-			($2 = '{}' OR authors && $2) AND
-			($3 = '' OR genre ILIKE '%' || $3 || '%')
+		SELECT 
+    b.id, 
+    b.title, 
+    ARRAY_AGG(a.name) AS authors, 
+    b.isbn, 
+    b.publication_date, 
+    b.genre, 
+    b.description, 
+    b.average_rating
+FROM 
+    books b
+LEFT JOIN 
+    book_authors ba ON b.id = ba.book_id
+LEFT JOIN 
+    authors a ON ba.author_id = a.id
+WHERE 
+    ($1 = '' OR b.title ILIKE '%' || $1 || '%') AND
+    ($2 = '{}' OR EXISTS (
+        SELECT 1 
+        FROM authors a_sub 
+        WHERE a_sub.id = ba.author_id AND a_sub.name = ANY(COALESCE($2::TEXT[], ARRAY[]::TEXT[]))
+    )) AND
+    ($3 = '' OR b.genre ILIKE '%' || $3 || '%')
+GROUP BY 
+    b.id;
+
 		`
 
 	// Execute the query with parameters
@@ -136,6 +168,8 @@ func (b BookModel) SearchDatabase(search Book) ([]Book, error) {
 		return nil, err
 	}
 	defer rows.Close()
+
+	logger.Info("Finished doing queries pushing data to slice")
 
 	// Prepare to collect the results
 	var books []Book
@@ -146,6 +180,7 @@ func (b BookModel) SearchDatabase(search Book) ([]Book, error) {
 
 		// Scan the row into the Book struct
 		err := rows.Scan(
+			&book.ID,
 			&book.Title,
 			pq.Array(&authors),
 			&book.ISBN,
@@ -157,7 +192,7 @@ func (b BookModel) SearchDatabase(search Book) ([]Book, error) {
 		if err != nil {
 			return nil, err
 		}
-
+		logger.Info("It Reaches here")
 		book.Authors = authors // Assign authors to the struct
 		books = append(books, book)
 	}
