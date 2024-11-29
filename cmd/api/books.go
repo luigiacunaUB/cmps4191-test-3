@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -50,9 +51,8 @@ func (a *applicationDependencies) AddBookHandler(w http.ResponseWriter, r *http.
 
 	//search for title if it exist to prevent duplication
 	var preResults []data.Book
-	titleSearch := data.Book{Title: book.Title, Authors: book.Authors, Genre: book.Genre}
 	logger.Info("Just before SearchDatabase Title Search")
-	preResults, err = a.BookModel.SearchDatabase(titleSearch)
+	preResults, err = a.BookModel.SearchDatabase(incomingData.Title, "", "")
 	if err != nil {
 		a.serverErrorResponse(w, r, err)
 		return
@@ -107,28 +107,21 @@ func (a *applicationDependencies) AddBookHandler(w http.ResponseWriter, r *http.
 // ----------------------------------------------------------------------------------------------------
 func (a *applicationDependencies) SearchFunction(w http.ResponseWriter, r *http.Request) {
 	//search for title,author,genre
-	//setting the incoming data for required search
-	var incomingData struct {
-		Title   string   `json:"title"`
-		Authors []string `json:"authors"`
-		Genre   string   `json:"genre"`
-	}
-	//read the data to see JSON is properly formed
-	err := a.readJSON(w, r, &incomingData)
-	if err != nil {
-		a.badRequestResponse(w, r, err)
-		return
+	var queryParametersData struct {
+		Title  string
+		Author string
+		Genre  string
 	}
 
-	search := &data.Book{
-		Title:   incomingData.Title,
-		Authors: incomingData.Authors,
-		Genre:   incomingData.Genre,
-	}
+	queryParameters := r.URL.Query()
+
+	queryParametersData.Title = a.getSingleQueryParameter(queryParameters, "title", "")
+	queryParametersData.Author = a.getSingleQueryParameter(queryParameters, "author", "")
+	queryParametersData.Genre = a.getSingleQueryParameter(queryParameters, "genre", "")
 
 	var results []data.Book
 	//pass search to SearchDatabase
-	results, err = a.BookModel.SearchDatabase(*search)
+	results, err := a.BookModel.SearchDatabase(queryParametersData.Title, queryParametersData.Author, queryParametersData.Genre)
 	if err != nil {
 		a.serverErrorResponse(w, r, err)
 		return
@@ -139,4 +132,136 @@ func (a *applicationDependencies) SearchFunction(w http.ResponseWriter, r *http.
 	if err != nil {
 		a.serverErrorResponse(w, r, err)
 	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------
+func (a *applicationDependencies) UpdateBookHandler(w http.ResponseWriter, r *http.Request) {
+	//read the id of the book that will updated
+	id, err := a.readIDParam(r)
+	if err != nil {
+		a.notFoundResponse(w, r)
+		return
+	}
+
+	book, err := a.BookModel.GetBook(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			a.notFoundResponse(w, r)
+			return
+		default:
+			a.serverErrorResponse(w, r, err)
+			return
+		}
+	}
+
+	//incoming data of data that can be changed
+	var incomingData struct {
+		Title           string    `json:"title"`
+		Authors         []string  `json:"authors"`
+		ISBN            string    `json:"isbn"`
+		PublicationDate time.Time `json:"publication_date"`
+		Genre           string    `json:"genre"`
+		Description     string    `json:"description"`
+	}
+
+	err = a.readJSON(w, r, &incomingData)
+	if err != nil {
+		a.badRequestResponse(w, r, err)
+		return
+	}
+
+	if incomingData.Title != "" {
+		book.Title = incomingData.Title
+	}
+	if len(incomingData.Authors) > 0 {
+		book.Authors = incomingData.Authors
+	}
+	if incomingData.ISBN != "" {
+		book.ISBN = incomingData.ISBN
+	}
+	if !incomingData.PublicationDate.IsZero() {
+		book.PublicationDate = incomingData.PublicationDate
+	}
+	if incomingData.Genre != "" {
+		book.Genre = incomingData.Genre
+	}
+	if incomingData.Description != "" {
+		book.Description = incomingData.Description
+	}
+
+	// Save the updated book back to the database.
+	err = a.BookModel.UpdateBook(book)
+	if err != nil {
+		a.serverErrorResponse(w, r, err)
+		return
+	}
+
+	// Respond with the updated book details.
+	err = a.writeJSON(w, http.StatusOK, envelope{"book": book}, nil)
+	if err != nil {
+		a.serverErrorResponse(w, r, err)
+	}
+
+}
+
+// --------------------------------------------------------------------------------------------------------------------------------
+func (a *applicationDependencies) DeleteBookHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := a.readIDParam(r)
+	if err != nil {
+		a.notFoundResponse(w, r)
+		return
+	}
+	err = a.BookModel.DeleteBook(id)
+	if err != nil {
+		a.serverErrorResponse(w, r, err)
+	}
+	err = a.writeJSON(w, http.StatusOK, envelope{"Book Deleted": id}, nil)
+	if err != nil {
+		a.serverErrorResponse(w, r, err)
+	}
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+func (a *applicationDependencies) ListBookHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := a.readIDParam(r)
+	if err != nil {
+		a.notFoundResponse(w, r)
+		return
+	}
+
+	book, err := a.BookModel.GetBook(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			a.notFoundResponse(w, r)
+			return
+		default:
+			a.serverErrorResponse(w, r, err)
+			return
+		}
+	}
+
+	// Create the response data
+	data := envelope{
+		"Location":         "/api/v1/books/" + fmt.Sprintf("%d", book.ID),
+		"Title":            book.Title,
+		"Authors":          book.Authors,
+		"ISBN":             book.ISBN,
+		"Publication Date": book.PublicationDate,
+		"Genre":            book.Genre,
+		"Description":      book.Description,
+		"Average Rating":   book.AverageRating,
+	}
+
+	// Write only the data to the response without headers
+	err = a.writeJSON(w, http.StatusOK, data, nil)
+	if err != nil {
+		a.serverErrorResponse(w, r, err)
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------
+func (a *applicationDependencies) ListAllHandler(w http.ResponseWriter, r *http.Request) {
+
 }

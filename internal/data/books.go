@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -125,61 +126,85 @@ func (b BookModel) AddBookToDatabase(book Book) (int64, error) {
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-func (b BookModel) SearchDatabase(search Book) ([]Book, error) {
+func (b BookModel) SearchDatabase(title string, author string, genre string) ([]Book, error) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	logger.Info("Inside Search Database, starting search")
-	//checking if results passed are ok
-	logger.Info("Title to be Searched", search.Title)
-	logger.Info("Author to be Searched", search.Authors)
-	logger.Info("Genre to be Searched", search.Genre)
 
-	query := `
-		SELECT 
-    b.id, 
-    b.title, 
-    ARRAY_AGG(a.name) AS authors, 
-    b.isbn, 
-    b.publication_date, 
-    b.genre, 
-    b.description, 
-    b.average_rating
-FROM 
-    books b
-LEFT JOIN 
-    book_authors ba ON b.id = ba.book_id
-LEFT JOIN 
-    authors a ON ba.author_id = a.id
-WHERE 
-    ($1 = '' OR b.title ILIKE '%' || $1 || '%') AND
-    ($2 = '{}' OR EXISTS (
-        SELECT 1 
-        FROM authors a_sub 
-        WHERE a_sub.id = ba.author_id AND a_sub.name = ANY(COALESCE($2::TEXT[], ARRAY[]::TEXT[]))
-    )) AND
-    ($3 = '' OR b.genre ILIKE '%' || $3 || '%')
-GROUP BY 
-    b.id;
+	formatQuery := func(query string) string {
+		if query == "" {
+			return ""
+		}
+		return strings.Join(strings.Fields(query), " & ")
+	}
 
+	formattedTitle := formatQuery(title)
+	//formattedTitle := formatQuery("great")
+	formattedAuthor := formatQuery(author)
+	formattedGenre := formatQuery(genre)
+
+	logger.Info("Formatted Title: ", formattedTitle)
+	logger.Info("Formatted Author: ", formattedAuthor)
+	logger.Info("Formatted Genre: ", formattedGenre)
+	//using queries search to find ids
+	query := `SELECT b.id
+	 	FROM books b
+		LEFT JOIN book_authors ba ON b.id = ba.book_id
+		LEFT JOIN authors a ON ba.author_id = a.id
+	 	WHERE
+		($1 = '' OR to_tsvector('simple',b.title)@@ plainto_tsquery('simple',$1)) AND
+		($2 = '' OR to_tsvector('simple', b.genre) @@ plainto_tsquery('simple', $2)) AND
+		($3 = '' OR to_tsvector('simple', a.name) @@ plainto_tsquery('simple', $3))
 		`
 
-	// Execute the query with parameters
-	rows, err := b.DB.Query(query, search.Title, pq.Array(search.Authors), search.Genre)
+	rows, err := b.DB.Query(query, formattedTitle, formattedGenre, formattedAuthor)
+
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	logger.Info("Finished doing queries pushing data to slice")
-
-	// Prepare to collect the results
-	var books []Book
+	var bookIDs []int64
 
 	for rows.Next() {
+		var bookID int64
+		if err := rows.Scan(&bookID); err != nil {
+			logger.Error("Error scanning row", slog.String("error", err.Error()))
+			return nil, err
+		}
+		bookIDs = append(bookIDs, bookID)
+	}
+
+	// Store the result in a variable (bookIDs)
+	result := bookIDs // Here you store the result in the variable 'result'
+
+	// Optionally log the results
+	logger.Info("Found book IDs", slog.Any("book_ids", result))
+
+	// If no books are found, return empty slice
+	if len(bookIDs) == 0 {
+		return nil, nil
+	}
+
+	query2 := `SELECT b.id, b.title, ARRAY_AGG(a.name) AS authors, b.isbn, b.publication_date, b.genre, b.description, b.average_rating
+	FROM books b
+	LEFT JOIN book_authors ba ON b.id = ba.book_id
+	LEFT JOIN authors a ON ba.author_id = a.id
+	WHERE b.id = ANY($1)
+	GROUP BY b.id, b.title, b.isbn, b.publication_date, b.genre, b.description, b.average_rating`
+
+	// Execute the second query
+	rows2, err := b.DB.Query(query2, pq.Array(bookIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows2.Close()
+
+	// Prepare to collect the book details
+	var books []Book
+	for rows2.Next() {
 		var book Book
 		var authors []string
-
-		// Scan the row into the Book struct
-		err := rows.Scan(
+		if err := rows2.Scan(
 			&book.ID,
 			&book.Title,
 			pq.Array(&authors),
@@ -188,19 +213,169 @@ GROUP BY
 			&book.Genre,
 			&book.Description,
 			&book.AverageRating,
-		)
-		if err != nil {
+		); err != nil {
 			return nil, err
 		}
-		logger.Info("It Reaches here")
-		book.Authors = authors // Assign authors to the struct
+		book.Authors = authors
 		books = append(books, book)
 	}
 
 	// Check for any errors that occurred during iteration
-	if err = rows.Err(); err != nil {
+	if err = rows2.Err(); err != nil {
 		return nil, err
+	}
+
+	// Optionally log the book details for debugging
+	for _, book := range books {
+		logger.Info("Book details",
+			slog.Int64("id", book.ID),
+			slog.String("title", book.Title),
+			slog.Float64("average_rating", book.AverageRating))
 	}
 
 	return books, nil
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+func (b BookModel) GetBook(id int64) (Book, error) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	//Gets the id and adds into book for use by update
+	//check if the id is not less than 1
+	if id < 1 {
+		return Book{}, ErrRecordNotFound
+	}
+
+	//if the id more than 1 preform the query
+	query := `SELECT b.id, b.title, ARRAY_AGG(a.name) AS authors, b.isbn, b.publication_date, b.genre, b.description, b.average_rating
+	FROM books b
+	LEFT JOIN book_authors ba ON b.id = ba.book_id
+	LEFT JOIN authors a ON ba.author_id = a.id
+	WHERE b.id = $1
+	GROUP BY b.id, b.title, b.isbn, b.publication_date, b.genre, b.description, b.average_rating`
+
+	// Prepare to store the book details.
+	var book Book
+	var authors []string
+
+	// Execute the query to retrieve the book.
+	err := b.DB.QueryRow(query, id).Scan(
+		&book.ID,
+		&book.Title,
+		pq.Array(&authors),
+		&book.ISBN,
+		&book.PublicationDate,
+		&book.Genre,
+		&book.Description,
+		&book.AverageRating,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Book{}, ErrRecordNotFound
+		}
+		return Book{}, err
+	}
+
+	// Assign authors to the book.
+	book.Authors = authors
+
+	// Log details of the book.
+	logger.Info("Book details",
+		slog.Int64("id", book.ID),
+		slog.String("title", book.Title),
+		slog.Float64("average_rating", book.AverageRating))
+
+	return book, nil
+
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------------------------
+func (b BookModel) UpdateBook(book Book) error {
+	// Start a transaction to ensure both the book and its authors are updated atomically.
+	tx, err := b.DB.Begin()
+	if err != nil {
+		return err
+	}
+
+	// Rollback the transaction in case of an error.
+	defer func() {
+		if p := recover(); p != nil {
+			tx.Rollback()
+			panic(p) // Re-throw the panic after rollback.
+		} else if err != nil {
+			tx.Rollback()
+		} else {
+			err = tx.Commit()
+		}
+	}()
+
+	// Update the book details in the `books` table.
+	query := `UPDATE books
+	          SET title = $1, isbn = $2, publication_date = $3, genre = $4, 
+	              description = $5, updated_at = NOW()
+	          WHERE id = $6`
+	_, err = tx.Exec(query,
+		book.Title,
+		book.ISBN,
+		book.PublicationDate,
+		book.Genre,
+		book.Description,
+		book.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Delete existing authors for the book in the `book_authors` table.
+	_, err = tx.Exec(`DELETE FROM book_authors WHERE book_id = $1`, book.ID)
+	if err != nil {
+		return err
+	}
+
+	// Insert new authors into the `book_authors` table.
+	for _, author := range book.Authors {
+		_, err = tx.Exec(`INSERT INTO book_authors (book_id, author_id)
+		                  SELECT $1, id FROM authors WHERE name = $2`,
+			book.ID, author)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// -------------------------------------------------------------------------------------------------------------------------------------
+func (b BookModel) DeleteBook(id int64) error {
+	if id < 1 {
+		return ErrRecordNotFound
+	}
+
+	// Start a transaction to ensure both DELETE operations are atomic
+	tx, err := b.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Step 1: Remove associations from book_authors
+	_, err = tx.Exec(`
+		DELETE FROM book_authors
+		WHERE book_id = $1`, id)
+	if err != nil {
+		return err
+	}
+
+	// Step 2: Delete the book from the books table
+	_, err = tx.Exec(`
+		DELETE FROM books
+		WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+
+	// Commit the transaction
+	return tx.Commit()
+
+}
+//-------------------------------------------------------------------------------------------------------------------------------------------
+func (b BookModel) ListAllBooks()(error)
