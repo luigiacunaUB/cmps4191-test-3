@@ -264,12 +264,37 @@ func (a *applicationDependencies) ListBookHandler(w http.ResponseWriter, r *http
 // -----------------------------------------------------------------------------------------------------------------------------------
 func (a *applicationDependencies) ListAllHandler(w http.ResponseWriter, r *http.Request) {
 
-	result, err := a.BookModel.ListAllBooks()
+	var queryParametersData struct {
+		data.Filters
+	}
+
+	queryParameters := r.URL.Query()
+
+	v := validator.New()
+
+	queryParametersData.Filters.Page = a.getSingleIntegerParameter(queryParameters, "page", 1, v)
+	queryParametersData.Filters.PageSize = a.getSingleIntegerParameter(queryParameters, "page_size", 10, v)
+
+	queryParametersData.Filters.Sort = a.getSingleQueryParameter(queryParameters, "sort", "id")
+	queryParametersData.Filters.SortSafeList = []string{"id", "category", "-id", "-category"}
+
+	data.ValidateFilters(v, queryParametersData.Filters)
+	if !v.IsEmpty() {
+		a.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	result, metadata, err := a.BookModel.ListAllBooks(queryParametersData.Filters)
 	if err != nil {
 		a.serverErrorResponse(w, r, err)
 	}
 
-	err = a.writeJSON(w, http.StatusOK, envelope{"books": result}, nil)
+	data := envelope{
+		"books":     result,
+		"@metadata": metadata,
+	}
+
+	err = a.writeJSON(w, http.StatusOK, data, nil)
 	if err != nil {
 		a.serverErrorResponse(w, r, err)
 	}

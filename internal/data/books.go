@@ -379,9 +379,9 @@ func (b BookModel) DeleteBook(id int64) error {
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------
-func (b BookModel) ListAllBooks() ([]Book, error) {
+func (b BookModel) ListAllBooks(filters Filters) ([]Book, MetaData, error) {
 	// query to display all details of books
-	query := `SELECT 
+	query := `SELECT COUNT (*) OVER (),
     	b.id AS book_id,
     	b.title,
     	b.isbn,
@@ -399,15 +399,17 @@ func (b BookModel) ListAllBooks() ([]Book, error) {
 	GROUP BY 
     	b.id, b.title, b.isbn, b.publication_date, b.genre, b.description, b.average_rating
 	ORDER BY 
-    	b.id;
+    	b.id
+	LIMIT $1 OFFSET $2;
 `
 
 	// Execute the query
-	rows, err := b.DB.Query(query)
+	rows, err := b.DB.Query(query, filters.limit(), filters.offset())
 	if err != nil {
-		return nil, err
+		return nil, MetaData{}, err
 	}
 	defer rows.Close()
+	totalRecords := 0
 
 	// Prepare a slice to hold the books
 	var books []Book
@@ -419,6 +421,7 @@ func (b BookModel) ListAllBooks() ([]Book, error) {
 
 		// Scan the row into the book and authors variables
 		err := rows.Scan(
+			&totalRecords,
 			&book.ID,
 			&book.Title,
 			&book.ISBN,
@@ -429,7 +432,7 @@ func (b BookModel) ListAllBooks() ([]Book, error) {
 			pq.Array(&authors),
 		)
 		if err != nil {
-			return nil, err
+			return nil, MetaData{}, err
 		}
 
 		// Assign authors to the book
@@ -441,8 +444,9 @@ func (b BookModel) ListAllBooks() ([]Book, error) {
 
 	// Check for errors during iteration
 	if err = rows.Err(); err != nil {
-		return nil, err
+		return nil, MetaData{}, err
 	}
+	metadata := calculateMetaData(totalRecords, filters.Page, filters.PageSize)
 
-	return books, nil
+	return books, metadata, nil
 }
