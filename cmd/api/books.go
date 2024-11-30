@@ -262,6 +262,7 @@ func (a *applicationDependencies) ListBookHandler(w http.ResponseWriter, r *http
 	}
 }
 
+// something to add
 // -----------------------------------------------------------------------------------------------------------------------------------
 func (a *applicationDependencies) ListAllHandler(w http.ResponseWriter, r *http.Request) {
 	//struct for the Filters
