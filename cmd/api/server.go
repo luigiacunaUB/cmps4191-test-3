@@ -33,7 +33,15 @@ func (a *applicationDependencies) serve() error {
 		a.logger.Info("shutting down server", "signal", s.String())
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		shutdownError <- apiServer.Shutdown(ctx)
+		err := apiServer.Shutdown(ctx)
+		if err != nil {
+			shutdownError <- err
+		}
+		//shutdownError <- apiServer.Shutdown(ctx)
+
+		a.logger.Info("completing background tasks", "address", apiServer.Addr)
+		a.wg.Wait()
+		shutdownError <- nil
 	}()
 
 	err := apiServer.ListenAndServe()

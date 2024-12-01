@@ -13,10 +13,12 @@ import (
 	"flag"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	_ "github.com/lib/pq"
 	"github.com/luigiacunaUB/cmps4191-test-3/internal/data"
+	"github.com/luigiacunaUB/cmps4191-test-3/internal/mailer"
 )
 
 const appVersion = "1.0.0"
@@ -32,6 +34,13 @@ type serverConfig struct {
 		burst   int
 		enabled bool
 	}
+	smtp struct {
+		host     string
+		port     int
+		username string
+		password string
+		sender   string
+	}
 }
 
 type applicationDependencies struct {
@@ -39,6 +48,8 @@ type applicationDependencies struct {
 	logger    *slog.Logger
 	BookModel data.BookModel
 	UserModel data.UserModel
+	mailer    mailer.Mailer
+	wg        sync.WaitGroup
 }
 
 func main() {
@@ -52,6 +63,12 @@ func main() {
 	flag.Float64Var(&settings.limiter.rps, "limiter-rps", 2, "Rate Limiter maximum requests per second")
 	flag.IntVar(&settings.limiter.burst, "limiter-burst", 5, "Rate Limiter maximum burst")
 	flag.BoolVar(&settings.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
+
+	flag.StringVar(&settings.smtp.host, "smtp-host", "192.168.0.100", "SMTP host")
+	flag.IntVar(&settings.smtp.port, "smtp-port", 25, "SMTP port")
+	flag.StringVar(&settings.smtp.username, "smtp-username", "", "SMTP username")
+	flag.StringVar(&settings.smtp.username, "smtp-password", "", "SMTP password")
+	flag.StringVar(&settings.smtp.sender, "smtp-sender", "Book Club <no-reply@bookclub.net>", "SMTP sender")
 
 	flag.Parse()
 
@@ -70,6 +87,7 @@ func main() {
 		logger:    logger,
 		BookModel: data.BookModel{DB: db},
 		UserModel: data.UserModel{DB: db},
+		mailer:    mailer.New(settings.smtp.host, settings.smtp.port, settings.smtp.username, settings.smtp.password, settings.smtp.sender),
 	}
 
 	err = appInstance.serve()

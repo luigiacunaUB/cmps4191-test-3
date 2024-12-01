@@ -118,3 +118,18 @@ func (a *applicationDependencies) getSingleIntegerParameter(queryParameters url.
 	}
 	return intValue
 }
+
+func (a *applicationDependencies) background(fn func()) {
+    a.wg.Add(1) 
+    go func() {
+        defer a.wg.Done()     
+        defer func() {
+           err := recover() 
+           if err != nil {
+                a.logger.Error(fmt.Sprintf("%v", err))
+            }
+        }()
+       fn()     
+   }()
+}
+
