@@ -28,8 +28,9 @@ func (a *applicationDependencies) routes() http.Handler {
 	router.HandlerFunc(http.MethodGet, "/api/v1/book/:id", a.ListBookHandler)       //list a single book
 	router.HandlerFunc(http.MethodGet, "/api/v1/books", a.ListAllHandler)           //list all books
 	//--------------------------------------USERS-------------------------------------------------
-	router.HandlerFunc(http.MethodPost, "/v1/users", a.registerUserHandler)          //register a user
-	router.HandlerFunc(http.MethodPut, "/v1/users/activated", a.activateUserHandler) //activate a user
+	router.HandlerFunc(http.MethodPost, "/v1/users", a.registerUserHandler)                              //register a user
+	router.HandlerFunc(http.MethodPut, "/v1/users/activated", a.activateUserHandler)                     //activate a user
+	router.HandlerFunc(http.MethodPost, "/v1/tokens/authentication", a.createAuthenticationTokenHandler) //authenticate token
 
-	return a.recoverPanic(a.rateLimit(router))
+	return a.recoverPanic(a.rateLimit(a.authenticate(router)))
 }

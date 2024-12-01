@@ -1,12 +1,16 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/luigiacunaUB/cmps4191-test-3/internal/data"
+	"github.com/luigiacunaUB/cmps4191-test-3/internal/validator"
 	"golang.org/x/time/rate"
 )
 
@@ -65,6 +69,47 @@ func (a *applicationDependencies) rateLimit(next http.Handler) http.Handler {
 			}
 			mu.Unlock()
 		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (a *applicationDependencies) authenticate(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Vary", "Authorization")
+		authorizationHeader := r.Header.Get("Authorization")
+		if authorizationHeader == "" {
+			r = a.contextSetUser(r, data.AnonymousUser)
+			next.ServeHTTP(w, r)
+			return
+		}
+		headerParts := strings.Split(authorizationHeader, " ")
+		if len(headerParts) != 2 || headerParts[0] != "Bearer" {
+			a.invalidAuthenticationTokenResponse(w, r)
+			return
+		}
+		token := headerParts[1]
+		v := validator.New()
+
+		data.ValidateTokenPlaintext(v, token)
+		if !v.IsEmpty() {
+			a.invalidAuthenticationTokenResponse(w, r)
+			return
+		}
+
+		user, err := a.UserModel.GetForToken(data.ScopeAuthentication, token)
+		if err != nil {
+			switch {
+			case errors.Is(err, data.ErrRecordNotFound):
+				a.invalidAuthenticationTokenResponse(w, r)
+			default:
+				a.serverErrorResponse(w, r, err)
+			}
+			return
+		}
+		// Add the retrieved user info to the context
+		r = a.contextSetUser(r, user)
+
+		// Call the next handler in the chain.
 		next.ServeHTTP(w, r)
 	})
 }

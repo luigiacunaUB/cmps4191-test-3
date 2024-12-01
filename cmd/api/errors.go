@@ -58,3 +58,17 @@ func (a *applicationDependencies) editConflictResponse(w http.ResponseWriter,
 	a.errorResponseJSON(w, r, http.StatusConflict, message)
 
 }
+
+func (a *applicationDependencies) invalidCredentialsResponse(w http.ResponseWriter, r *http.Request) {
+	message := "invalid authentication credentials"
+	a.errorResponseJSON(w, r, http.StatusUnauthorized, message)
+}
+
+func (a *applicationDependencies)invalidAuthenticationTokenResponse(w http.ResponseWriter, r *http.Request) {
+
+     w.Header().Set("WWW-Authenticate", "Bearer")
+
+     message := "invalid or missing authentication token"
+     a.errorResponseJSON(w, r, http.StatusUnauthorized, message)
+
+}
