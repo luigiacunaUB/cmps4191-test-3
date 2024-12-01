@@ -28,3 +28,4 @@ db/migrations/up:
 db/migrations/down:
 	@echo 'running down migrations'
 	migrate -path ./migrations -database $(BOOKSTORE_DB_DSN) down
+

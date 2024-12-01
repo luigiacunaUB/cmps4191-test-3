@@ -44,13 +44,14 @@ type serverConfig struct {
 }
 
 type applicationDependencies struct {
-	config    serverConfig
-	logger    *slog.Logger
-	BookModel data.BookModel
-	UserModel data.UserModel
-	TokenModel data.TokenModel
-	mailer    mailer.Mailer
-	wg        sync.WaitGroup
+	config          serverConfig
+	logger          *slog.Logger
+	BookModel       data.BookModel
+	UserModel       data.UserModel
+	TokenModel      data.TokenModel
+	mailer          mailer.Mailer
+	wg              sync.WaitGroup
+	PermissionModel data.PermissionModel
 }
 
 func main() {
@@ -84,12 +85,13 @@ func main() {
 	logger.Info("database connection pool established")
 
 	appInstance := &applicationDependencies{
-		config:     settings,
-		logger:     logger,
-		BookModel:  data.BookModel{DB: db},
-		UserModel:  data.UserModel{DB: db},
-		TokenModel: data.TokenModel{DB: db},
-		mailer:     mailer.New(settings.smtp.host, settings.smtp.port, settings.smtp.username, settings.smtp.password, settings.smtp.sender),
+		config:          settings,
+		logger:          logger,
+		BookModel:       data.BookModel{DB: db},
+		UserModel:       data.UserModel{DB: db},
+		TokenModel:      data.TokenModel{DB: db},
+		mailer:          mailer.New(settings.smtp.host, settings.smtp.port, settings.smtp.username, settings.smtp.password, settings.smtp.sender),
+		PermissionModel: data.PermissionModel{DB: db},
 	}
 
 	err = appInstance.serve()

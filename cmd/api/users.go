@@ -53,6 +53,13 @@ func (a *applicationDependencies) registerUserHandler(w http.ResponseWriter, r *
 		}
 		return
 	}
+	err = a.PermissionModel.AddForUser(user.ID, "books:read")
+    if err != nil {
+        a.serverErrorResponse(w, r, err)
+        return
+    }
+
+
 
 	token, err := a.TokenModel.New(user.ID, 3*24*time.Hour, data.ScopeActivation)
 	if err != nil {

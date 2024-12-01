@@ -64,11 +64,47 @@ func (a *applicationDependencies) invalidCredentialsResponse(w http.ResponseWrit
 	a.errorResponseJSON(w, r, http.StatusUnauthorized, message)
 }
 
-func (a *applicationDependencies)invalidAuthenticationTokenResponse(w http.ResponseWriter, r *http.Request) {
+func (a *applicationDependencies) invalidAuthenticationTokenResponse(w http.ResponseWriter, r *http.Request) {
 
-     w.Header().Set("WWW-Authenticate", "Bearer")
+	w.Header().Set("WWW-Authenticate", "Bearer")
 
-     message := "invalid or missing authentication token"
-     a.errorResponseJSON(w, r, http.StatusUnauthorized, message)
+	message := "invalid or missing authentication token"
+	a.errorResponseJSON(w, r, http.StatusUnauthorized, message)
 
 }
+
+func (a *applicationDependencies) authenticationRequiredResponse(w http.ResponseWriter, r *http.Request) {
+	message := "you must be authenticated to access this resource"
+	a.errorResponseJSON(w, r, http.StatusUnauthorized, message)
+}
+
+func (a *applicationDependencies) inactiveAccountResponse(w http.ResponseWriter, r *http.Request) {
+	message := "your user account must be activated to access this resource"
+	a.errorResponseJSON(w, r, http.StatusForbidden, message)
+}
+
+func (a *applicationDependencies) notPermittedResponse(w http.ResponseWriter,
+	r *http.Request) {
+	message := "your user account doesn't have the necessary permissions to access this resource"
+
+	a.errorResponseJSON(w, r, http.StatusForbidden, message)
+}
+
+func (a *applicationDependencies) requirePermission(permissionCode string, next http.HandlerFunc)http.HandlerFunc { 
+     
+   fn := func(w http.ResponseWriter, r *http.Request) {
+       user := a.contextGetUser(r)
+       permissions, err := a.PermissionModel.GetAllForUser(user.ID)
+        if err != nil {
+            a.serverErrorResponse(w, r, err)
+            return
+        }
+		if !permissions.Include(permissionCode) {
+            a.notPermittedResponse(w, r)
+            return
+   }
+   next.ServeHTTP(w, r)
+ }
+ return a.requireActivatedUser(fn)  
+}
+
