@@ -34,6 +34,7 @@ type UserModel struct {
 	DB *sql.DB
 }
 
+// -------------------------------------------------------------------------------------------------------------------------------------
 func (u UserModel) Insert(user *User) error {
 	query := `
             INSERT INTO users (username, email, password_hash, activated) 
@@ -58,6 +59,7 @@ func (u UserModel) Insert(user *User) error {
 	return nil
 }
 
+// --------------------------------------------------------------------------------------------------------------------------------------
 func (u UserModel) GetByEmail(email string) (*User, error) {
 	query := `
        SELECT id, created_at, username, email, password_hash, activated, version
@@ -92,6 +94,7 @@ func (u UserModel) GetByEmail(email string) (*User, error) {
 
 }
 
+// --------------------------------------------------------------------------------------------------------------------------------------
 func (p *password) Set(plaintextPassword string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(plaintextPassword), 12)
 	if err != nil {
@@ -117,17 +120,20 @@ func (p *password) Matches(plaintextPassword string) (bool, error) {
 	return true, nil
 }
 
+// -----------------------------------------------------------------------------------------------------------------------------------
 func ValidateEmail(v *validator.Validator, email string) {
 	v.Check(email != "", "email", "must be provided")
 	v.Check(validator.Matches(email, validator.EmailRX), "email", "must be a valid email address")
 }
 
+// -----------------------------------------------------------------------------------------------------------------------------------
 func ValidatePasswordPlaintext(v *validator.Validator, password string) {
 	v.Check(password != "", "password", "must be provided")
 	v.Check(len(password) >= 8, "password", "must be at least 8 bytes long")
 	v.Check(len(password) <= 72, "password", "must not be more than 72 bytes long")
 }
 
+// -------------------------------------------------------------------------------------------------------------------------------------
 func ValidateUser(v *validator.Validator, user *User) {
 	v.Check(user.Username != "", "username", "must be provided")
 	v.Check(len(user.Username) <= 200, "username", "must not be more than 200 bytes long")
@@ -144,6 +150,7 @@ func ValidateUser(v *validator.Validator, user *User) {
 
 }
 
+// --------------------------------------------------------------------------------------------------------------------------------------
 func (u UserModel) Update(user *User) error {
 	query := `
         UPDATE users 
@@ -183,6 +190,7 @@ func (u UserModel) Update(user *User) error {
 
 }
 
+// --------------------------------------------------------------------------------------------------------------------------------------
 func (u UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error) {
 	tokenHash := sha256.Sum256([]byte(tokenPlaintext))
 	query := `
@@ -219,7 +227,34 @@ func (u UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error)
 	return &user, nil
 }
 
+// --------------------------------------------------------------------------------------------------------------------------------------
 func (u *User) IsAnonymous() bool {
-    return u == AnonymousUser
+	return u == AnonymousUser
 }
 
+// -------------------------------------------------------------------------------------------------------------------------------------
+func (u UserModel) GetID(id int64) (bool, int64, error) {
+	query := `SELECT id FROM users WHERE id=$1;`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// Variable to hold the user ID
+	var userID int64
+
+	// Execute the query
+	err := u.DB.QueryRowContext(ctx, query, id).Scan(&userID)
+
+	// Handle potential errors
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return false, 0, nil // User does not exist, return false with 0 as ID
+		default:
+			return false, 0, err // Return any other error
+		}
+	}
+
+	// Return true (user exists), user ID, and nil for error
+	return true, userID, nil
+}

@@ -9,6 +9,7 @@ import (
 	"github.com/luigiacunaUB/cmps4191-test-3/internal/validator"
 )
 
+// -------------------------------------------------------------------------------------------------------------------------------------
 func (a *applicationDependencies) registerUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	var incomingData struct {
@@ -54,12 +55,10 @@ func (a *applicationDependencies) registerUserHandler(w http.ResponseWriter, r *
 		return
 	}
 	err = a.PermissionModel.AddForUser(user.ID, "books:read")
-    if err != nil {
-        a.serverErrorResponse(w, r, err)
-        return
-    }
-
-
+	if err != nil {
+		a.serverErrorResponse(w, r, err)
+		return
+	}
 
 	token, err := a.TokenModel.New(user.ID, 3*24*time.Hour, data.ScopeActivation)
 	if err != nil {
@@ -90,6 +89,7 @@ func (a *applicationDependencies) registerUserHandler(w http.ResponseWriter, r *
 	}
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------
 func (a *applicationDependencies) activateUserHandler(w http.ResponseWriter, r *http.Request) {
 	var incomingData struct {
 		TokenPlaintext string `json:"token"`

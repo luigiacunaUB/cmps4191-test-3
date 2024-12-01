@@ -465,3 +465,21 @@ func (b BookModel) ListAllBooks(filters Filters) ([]Book, MetaData, error) {
 
 	return books, metadata, nil
 }
+
+// --------------------------------------------------------------------------------------------------------------------------------------------
+func (b BookModel) SearchBookByID(id int64) (bool, error) {
+	query := `SELECT id FROM books WHERE id=$1;`
+	var foundID int
+	err := b.DB.QueryRow(query, id).Scan(&foundID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Book with the given ID does not exist
+			return false, nil
+		}
+		// An unexpected error occurred
+		return false, err
+	}
+
+	// Book exists
+	return true, nil
+}

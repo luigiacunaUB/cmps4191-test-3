@@ -49,9 +49,10 @@ type applicationDependencies struct {
 	BookModel       data.BookModel
 	UserModel       data.UserModel
 	TokenModel      data.TokenModel
+	PermissionModel data.PermissionModel
+	ReviewModel     data.ReviewModel
 	mailer          mailer.Mailer
 	wg              sync.WaitGroup
-	PermissionModel data.PermissionModel
 }
 
 func main() {
@@ -90,8 +91,9 @@ func main() {
 		BookModel:       data.BookModel{DB: db},
 		UserModel:       data.UserModel{DB: db},
 		TokenModel:      data.TokenModel{DB: db},
-		mailer:          mailer.New(settings.smtp.host, settings.smtp.port, settings.smtp.username, settings.smtp.password, settings.smtp.sender),
 		PermissionModel: data.PermissionModel{DB: db},
+		ReviewModel:     data.ReviewModel{DB: db},
+		mailer:          mailer.New(settings.smtp.host, settings.smtp.port, settings.smtp.username, settings.smtp.password, settings.smtp.sender),
 	}
 
 	err = appInstance.serve()

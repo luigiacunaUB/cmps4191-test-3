@@ -11,6 +11,7 @@ import (
 	"github.com/luigiacunaUB/cmps4191-test-3/internal/validator"
 )
 
+
 const ScopeActivation = "activation"
 const ScopeAuthentication = "authentication"
 
@@ -21,7 +22,7 @@ type Token struct {
 	Expiry    time.Time `json: "expiry"`
 	Scope     string    `json:"-"`
 }
-
+//--------------------------------------------------------------------------------------------------------------------------------------
 func generateToken(userID int64, ttl time.Duration, scope string) (*Token, error) {
 	token := &Token{
 		UserID: userID,
@@ -39,17 +40,16 @@ func generateToken(userID int64, ttl time.Duration, scope string) (*Token, error
 
 	return token, nil
 }
-
+//------------------------------------------------------------------------------------------------------------------------------------
 func ValidateTokenPlaintext(v *validator.Validator, tokenPlaintext string) {
 	v.Check(tokenPlaintext != "", "token", "must be provided")
 	v.Check(len(tokenPlaintext) == 26, "token", "must be 26 bytes long")
 }
-
-// Our access to the database
+//---------------------------------------------------------------------------------------------------------------------------------------
 type TokenModel struct {
 	DB *sql.DB
 }
-
+//-------------------------------------------------------------------------------------------------------------------------------------
 func (t TokenModel) New(userID int64, ttl time.Duration, scope string) (*Token, error) {
 	token, err := generateToken(userID, ttl, scope)
 	if err != nil {
@@ -59,7 +59,7 @@ func (t TokenModel) New(userID int64, ttl time.Duration, scope string) (*Token, 
 	err = t.Insert(token)
 	return token, err
 }
-
+//---------------------------------------------------------------------------------------------------------------------------------------
 func (t TokenModel) Insert(token *Token) error {
 	query := `
 				INSERT INTO tokens (hash, user_id, expiry, scope) 
@@ -73,7 +73,7 @@ func (t TokenModel) Insert(token *Token) error {
 	_, err := t.DB.ExecContext(ctx, query, args...)
 	return err
 }
-
+//---------------------------------------------------------------------------------------------------------------------------------------
 func (t TokenModel) DeleteAllForUser(scope string, userID int64) error {
 	query := `
 						DELETE FROM tokens 

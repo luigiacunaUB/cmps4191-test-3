@@ -9,6 +9,7 @@ import (
 	"github.com/luigiacunaUB/cmps4191-test-3/internal/validator"
 )
 
+// -------------------------------------------------------------------------------------------------------------------------------------
 func (a *applicationDependencies) createAuthenticationTokenHandler(w http.ResponseWriter, r *http.Request) {
 	var incomingData struct {
 		Email    string `json:"email"`
@@ -61,6 +62,7 @@ func (a *applicationDependencies) createAuthenticationTokenHandler(w http.Respon
 
 	data := envelope{
 		"authentication_token": token,
+		"Please use your ID when creating reviews and/or readinglist (YOUR USERID)": user.ID,
 	}
 
 	// Return the bearer token
