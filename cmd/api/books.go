@@ -301,6 +301,4 @@ func (a *applicationDependencies) ListAllHandler(w http.ResponseWriter, r *http.
 		a.serverErrorResponse(w, r, err)
 	}
 
-
 }
-
