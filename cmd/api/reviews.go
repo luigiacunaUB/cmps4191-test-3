@@ -34,22 +34,28 @@ func (a *applicationDependencies) AddBookReviewHandler(w http.ResponseWriter, r 
 	}
 
 	review := &data.Review{
-		UserID: incomingData.UserID,
 		BookID: id,
+		UserID: incomingData.UserID,
 		Review: incomingData.Review,
 		Rating: incomingData.Rating,
+	}
+	book := &data.Book{
+		ID: id,
 	}
 	//do the validation checks
 	v := validator.New()
 
-	data.ValidateReview(v, a.BookModel, a.ReviewModel, review)
+	//check if the book exist
+	data.ValidateBookIDOnly(v, a.BookModel, book)
+	//validate review
+	data.ValidateReview(v, a.ReviewModel, review)
 	if !v.IsEmpty() {
 		a.failedValidationResponse(w, r, v.Errors)
 		return
 	}
 
 	//check if the user exist
-	ans, err := a.UserModel.GetID(incomingData.UserID)
+	_, ans, err := a.UserModel.GetID(incomingData.UserID)
 	if err != nil {
 		a.serverErrorResponse(w, r, err)
 		fmt.Printf("ans: %v\n", ans)
@@ -98,14 +104,15 @@ func (a *applicationDependencies) AddBookReviewHandler(w http.ResponseWriter, r 
 func (a *applicationDependencies) UpdateBookReviewHandler(w http.ResponseWriter, r *http.Request) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	logger.Info("Inside UpdateBookReviewHandler 1")
-
+	//get the review id
 	id, err := a.readIDParam(r)
 	if err != nil {
 		a.notFoundResponse(w, r)
 		return
 	}
+	logger.Info("UpdatedBookReviewHandler ID: ", id)
 
-	// set params for incoming data
+	// set params for incoming data to be updated
 	var incomingData struct {
 		Review string `json:"review"`
 		Rating int64  `json:"rating"`
@@ -124,19 +131,12 @@ func (a *applicationDependencies) UpdateBookReviewHandler(w http.ResponseWriter,
 	//do the validation checks
 	v := validator.New()
 	//validation checks
-	data.ValidateReview(v, a.BookModel, a.ReviewModel, review)
+	data.ValidateReview(v, a.ReviewModel, review)
 	if !v.IsEmpty() {
 		a.failedValidationResponse(w, r, v.Errors)
 		return
 	}
-
-	//get the userid from the review
-	ans, _, err := a.UserModel.GetID(incomingData.UserID)
-	if err != nil {
-		a.serverErrorResponse(w, r, err)
-		fmt.Printf("ans: %v\n", ans)
-		return
-	}
+	//once validation is done do the update
 	results, err := a.ReviewModel.UpdateReview(*review)
 	if err != nil {
 		a.serverErrorResponse(w, r, err)
@@ -144,8 +144,8 @@ func (a *applicationDependencies) UpdateBookReviewHandler(w http.ResponseWriter,
 	}
 
 	data := envelope{
-		"Review Updated for ID":   results.ID,
-		"Created and Modified By": results.UserID,
+		"Review Updated for ID": results.ID,
+		"New Review":            results.Review,
 	}
 
 	err = a.writeJSON(w, http.StatusCreated, data, nil)

@@ -29,10 +29,11 @@ func (a *applicationDependencies) routes() http.Handler {
 	router.HandlerFunc(http.MethodGet, "/api/v1/books", a.requirePermission("books:read", a.ListAllHandler))            //list all books
 	//--------------------------------------REVIEWS-----------------------------------------------------------------------------------------------------------------------------
 	router.HandlerFunc(http.MethodPost, "/api/v1/books/:id/reviews", a.requirePermission("books:write", a.AddBookReviewHandler)) //add a review
+	router.HandlerFunc(http.MethodPut, "/api//v1/reviews/:id", a.requirePermission("books:write", a.UpdateBookReviewHandler))    //update review
 	//--------------------------------------USERS-------------------------------------------------------------------------------------------------------------------------------
 	router.HandlerFunc(http.MethodPost, "/v1/users", a.registerUserHandler)                              //register a user
 	router.HandlerFunc(http.MethodPut, "/v1/users/activated", a.activateUserHandler)                     //activate a user
 	router.HandlerFunc(http.MethodPost, "/v1/tokens/authentication", a.createAuthenticationTokenHandler) //authenticate token
-	router.HandlerFunc(http.MethodPut,"/api/v1/reviews/:id",a.UpdateBookReviewHandler) //update a review
+	router.HandlerFunc(http.MethodPut, "/api/v1/reviews/:id", a.UpdateBookReviewHandler)                 //update a review
 	return a.recoverPanic(a.rateLimit(a.authenticate(router)))
 }

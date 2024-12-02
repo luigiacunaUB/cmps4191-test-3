@@ -24,18 +24,9 @@ type Review struct {
 	Rating int64  `json:"rating"`
 }
 
-func ValidateReview(v *validator.Validator, b BookModel, r ReviewModel, review *Review) {
+func ValidateReview(v *validator.Validator, r ReviewModel, review *Review) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	logger.Info("Inside ValidateReview")
-	logger.Info("BookID being sent: ", review.BookID)
-	//check firstly if the book even exist
-	v.Check(review.BookID >= 1, "BookID", "BookID cannot be less than 1 this one")
-	ans, err := b.SearchBookByID(review.BookID)
-	if err != nil {
-		return
-	}
-	logger.Info("Answer: ", ans)
-	v.Check(ans, "BookID", "BookID does not exist")
 	//check if the review is less than 100 bytes long
 	v.Check(review.Review != "", "Review", "Must not be Empty")
 	v.Check(len(review.Review) <= 100, "Review", "Must not be more than 100 bytes long")
@@ -43,11 +34,18 @@ func ValidateReview(v *validator.Validator, b BookModel, r ReviewModel, review *
 	v.Check(review.Rating >= 1 && review.Rating <= 5, "Ratings", "Ratings must between 1 and 5")
 }
 
+func ValidateReviewIDOnly(v *validator.Validator, r ReviewModel, review *Review) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	logger.Info("ReviewID being sent: ", review.ID)
+	v.Check(review.ID >= 1, "ReviewID", "ReviewID cannot be less than 1 this one")
+}
+
 func (r ReviewModel) AddBookReview(review Review) (Review, error) {
+
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	logger.Info("Inside AddBooReviewHandler")
-	logger.Info("BookID sent SQL:", review.BookID)
 	logger.Info("UserID sent SQL:", review.UserID)
+	logger.Info("BookID sent SQL: ", review.BookID)
 	logger.Info("Review sent SQL:", review.Review)
 	logger.Info("Rating sent SQL:", review.Rating)
 
@@ -65,7 +63,6 @@ func (r ReviewModel) AddBookReview(review Review) (Review, error) {
 		review.Rating,
 		review.Review,
 	}
-
 	// Context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -91,32 +88,30 @@ func (r ReviewModel) AddBookReview(review Review) (Review, error) {
 
 // --------------------------------------------------------------------------------------------------------------------------------------
 func (r ReviewModel) UpdateReview(review Review) (Review, error) {
-	//Check if the user actually made the review
-	rcheck := r.CheckIfReviewExistForUser(review.BookID, review.UserID)
-	if rcheck {
-		return review, fmt.Errorf("user has already reviewed this book")
-	}
+	//workflow
+	//parameters recieved from review: reviewID, updated review, updated rating
+	//update the review
 
-	//get the review id number to modify
-	var reviewID int64
-	query := `SELECT id FROM reviews WHERE user_id=$1 AND book_id=$2`
-	err := r.DB.QueryRow(query, review.UserID, review.BookID).Scan(&reviewID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return review, fmt.Errorf("review not found")
-		}
-		return review, fmt.Errorf("failed to retrieve review ID: %v", err)
-	}
+	//EXECUTION
+	updateQuery := `
+		UPDATE reviews 
+		SET rating = $1, review = $2, updated_at = CURRENT_TIMESTAMP 
+		WHERE id = $3 
+		RETURNING id, book_id, rating, review
+	`
+	// Prepare variables to store the updated data
+	var updatedReview Review
 
-	// Update the review in the database
-	updateQuery := `UPDATE reviews SET rating = $1, review = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3`
-	_, err = r.DB.Exec(updateQuery, review.Rating, review.Review, reviewID)
+	// Execute the query and scan the updated values
+	err := r.DB.QueryRow(updateQuery, review.Rating, review.Review, review.ID).
+		Scan(&updatedReview.ID, &updatedReview.BookID, &updatedReview.Rating, &updatedReview.Review)
+
 	if err != nil {
-		return review, fmt.Errorf("failed to update review: %v", err)
+		return Review{}, fmt.Errorf("failed to update review: %w", err)
 	}
 
 	// Return the updated review
-	return review, nil
+	return updatedReview, nil
 }
 
 func (r ReviewModel) CheckIfReviewExistForUser(bookid int64, userid int64) bool {
@@ -142,4 +137,21 @@ func (r ReviewModel) CheckIfReviewExistForUser(bookid int64, userid int64) bool 
 
 	// A review exists
 	return true
+}
+
+func (b BookModel) SearchReviewByID(id int64) (bool, error) {
+	query := `SELECT id FROM review WHERE id=$1;`
+	var foundID int
+	err := b.DB.QueryRow(query, id).Scan(&foundID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Review with the given ID does not exist
+			return false, nil
+		}
+		// An unexpected error occurred
+		return false, err
+	}
+
+	// Review exists
+	return true, nil
 }

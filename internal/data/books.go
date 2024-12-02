@@ -61,6 +61,12 @@ func ValidateBook(v *validator.Validator, b BookModel, book *Book) {
 	v.Check(book.AverageRating >= 1 && book.AverageRating <= 5, "Ratings", "Ratings must between 1 and 5")
 }
 
+func ValidateBookIDOnly(v *validator.Validator, b BookModel, book *Book) {
+	//check firstly if the book even exist
+	//logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	v.Check(book.ID >= 1, "BookID", "BookID cannot be less than 1 this one")
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 func (b BookModel) AddBookToDatabase(book Book) (int64, error) {
 
