@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -153,4 +154,65 @@ func (a *applicationDependencies) UpdateBookReviewHandler(w http.ResponseWriter,
 		a.serverErrorResponse(w, r, err)
 	}
 
+}
+
+// --------------------------------------------------------------------------------------------------------------------------
+func (a *applicationDependencies) ListAllReviewsByBookHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := a.readIDParam(r)
+	if err != nil {
+		a.notFoundResponse(w, r)
+		return
+	}
+
+	// Call the ListAllReviews method
+	result, err := a.ReviewModel.ListAllReviews(id)
+	if err != nil {
+		// Log the error and respond with a server error
+		http.Error(w, "Unable to fetch reviews", http.StatusInternalServerError)
+		return
+	}
+
+	data := envelope{
+		"All Reviews": result,
+	}
+
+	err = a.writeJSON(w, http.StatusOK, data, nil)
+	if err != nil {
+		a.serverErrorResponse(w, r, err)
+	}
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+func (a *applicationDependencies) DeleteReviewHandler(w http.ResponseWriter, r *http.Request) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	logger.Info("Inside DeleteBookReviewHandler")
+
+	// Get the review ID from the request parameters
+	id, err := a.readIDParam(r)
+	if err != nil {
+		a.notFoundResponse(w, r)
+		return
+	}
+	logger.Info("DeleteBookReviewHandler ID: ", id)
+
+	// Attempt to delete the review
+	results, err := a.ReviewModel.DeleteReview(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			a.notFoundResponse(w, r)
+		default:
+			a.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	// Respond with a success message
+	data := envelope{
+		"Review Deleted for ID": results.ID,
+	}
+	err = a.writeJSON(w, http.StatusOK, data, nil)
+	if err != nil {
+		a.serverErrorResponse(w, r, err)
+	}
 }

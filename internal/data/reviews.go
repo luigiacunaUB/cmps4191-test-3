@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -139,19 +140,77 @@ func (r ReviewModel) CheckIfReviewExistForUser(bookid int64, userid int64) bool 
 	return true
 }
 
-func (b BookModel) SearchReviewByID(id int64) (bool, error) {
-	query := `SELECT id FROM review WHERE id=$1;`
-	var foundID int
-	err := b.DB.QueryRow(query, id).Scan(&foundID)
+// ---------------------------------------------------------------------------------------------------------------------------
+func (r ReviewModel) ListAllReviews(bookID int64) ([]Review, error) {
+	query := `
+        SELECT id, book_id, user_id, rating, review
+        FROM reviews
+        WHERE book_id = $1
+        ORDER BY id
+    `
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// Execute the query with the bookID parameter
+	rows, err := r.DB.QueryContext(ctx, query, bookID)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			// Review with the given ID does not exist
-			return false, nil
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Slice to hold the reviews
+	var reviews []Review
+
+	// Iterate through the result set
+	for rows.Next() {
+		var review Review
+		err := rows.Scan(
+			&review.ID,
+			&review.BookID,
+			&review.UserID,
+			&review.Rating,
+			&review.Review,
+		)
+		if err != nil {
+			return nil, err
 		}
-		// An unexpected error occurred
-		return false, err
+		reviews = append(reviews, review)
 	}
 
-	// Review exists
-	return true, nil
+	// Check for errors from the iteration
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return reviews, nil
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+func (r ReviewModel) DeleteReview(reviewID int64) (Review, error) {
+	// Workflow:
+	// Parameters received: reviewID
+	// Delete the review and return the deleted review details
+
+	deleteQuery := `
+		DELETE FROM reviews 
+		WHERE id = $1
+		RETURNING id, book_id, user_id, rating, review
+	`
+
+	// Prepare a variable to store the deleted review details
+	var deletedReview Review
+
+	// Execute the query and scan the deleted values
+	err := r.DB.QueryRow(deleteQuery, reviewID).
+		Scan(&deletedReview.ID, &deletedReview.BookID, &deletedReview.UserID, &deletedReview.Rating, &deletedReview.Review)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Review{}, err
+		}
+		return Review{}, fmt.Errorf("failed to delete review: %w", err)
+	}
+
+	// Return the deleted review details
+	return deletedReview, nil
 }

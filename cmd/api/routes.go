@@ -28,8 +28,10 @@ func (a *applicationDependencies) routes() http.Handler {
 	router.HandlerFunc(http.MethodGet, "/api/v1/book/:id", a.requirePermission("books:read", a.ListBookHandler))        //list a single book
 	router.HandlerFunc(http.MethodGet, "/api/v1/books", a.requirePermission("books:read", a.ListAllHandler))            //list all books
 	//--------------------------------------REVIEWS-----------------------------------------------------------------------------------------------------------------------------
-	router.HandlerFunc(http.MethodPost, "/api/v1/books/:id/reviews", a.requirePermission("books:write", a.AddBookReviewHandler)) //add a review
-	router.HandlerFunc(http.MethodPut, "/api//v1/reviews/:id", a.requirePermission("books:write", a.UpdateBookReviewHandler))    //update review
+	router.HandlerFunc(http.MethodPost, "/api/v1/books/:id/reviews", a.requirePermission("books:write", a.AddBookReviewHandler))     //add a review
+	router.HandlerFunc(http.MethodPut, "/api//v1/reviews/:id", a.requirePermission("books:write", a.UpdateBookReviewHandler))        //update review
+	router.HandlerFunc(http.MethodGet, "/api/v1/book/:id/reviews", a.requirePermission("books:read", a.ListAllReviewsByBookHandler)) //list all reviews by bookID
+	router.HandlerFunc(http.MethodDelete, "/api/v1/reviews/:id", a.requirePermission("books:read", a.DeleteReviewHandler))           //delete a review
 	//--------------------------------------USERS-------------------------------------------------------------------------------------------------------------------------------
 	router.HandlerFunc(http.MethodPost, "/v1/users", a.registerUserHandler)                              //register a user
 	router.HandlerFunc(http.MethodPut, "/v1/users/activated", a.activateUserHandler)                     //activate a user
