@@ -6,6 +6,5 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash bytea NOT NULL,
     activated bool NOT NULL,
     version integer NOT NULL DEFAULT 1,
-    reading_list int,
     reviews int
 );
