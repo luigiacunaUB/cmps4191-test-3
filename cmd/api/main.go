@@ -44,15 +44,16 @@ type serverConfig struct {
 }
 
 type applicationDependencies struct {
-	config          serverConfig
-	logger          *slog.Logger
-	BookModel       data.BookModel
-	UserModel       data.UserModel
-	TokenModel      data.TokenModel
-	PermissionModel data.PermissionModel
-	ReviewModel     data.ReviewModel
-	mailer          mailer.Mailer
-	wg              sync.WaitGroup
+	config           serverConfig
+	logger           *slog.Logger
+	BookModel        data.BookModel
+	UserModel        data.UserModel
+	TokenModel       data.TokenModel
+	PermissionModel  data.PermissionModel
+	ReviewModel      data.ReviewModel
+	ReadingListModel data.ReadingListModel
+	mailer           mailer.Mailer
+	wg               sync.WaitGroup
 }
 
 func main() {
@@ -66,8 +67,8 @@ func main() {
 	flag.Float64Var(&settings.limiter.rps, "limiter-rps", 2, "Rate Limiter maximum requests per second")
 	flag.IntVar(&settings.limiter.burst, "limiter-burst", 5, "Rate Limiter maximum burst")
 	flag.BoolVar(&settings.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
-
-	flag.StringVar(&settings.smtp.host, "smtp-host", "192.168.0.100", "SMTP host")
+	//using an application called fake-SMTP, Mailtrap did not work
+	flag.StringVar(&settings.smtp.host, "smtp-host", "192.168.7.123", "SMTP host")
 	flag.IntVar(&settings.smtp.port, "smtp-port", 25, "SMTP port")
 	flag.StringVar(&settings.smtp.username, "smtp-username", "", "SMTP username")
 	flag.StringVar(&settings.smtp.username, "smtp-password", "", "SMTP password")

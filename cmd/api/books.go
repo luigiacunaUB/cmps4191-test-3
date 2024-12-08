@@ -32,6 +32,7 @@ func (a *applicationDependencies) AddBookHandler(w http.ResponseWriter, r *http.
 	if err != nil {
 		a.badRequestResponse(w, r, err)
 	}
+	//push the incoming data to book datatype
 	book := &data.Book{
 		Title:           incomingData.Title,
 		Authors:         incomingData.Authors,
@@ -41,6 +42,14 @@ func (a *applicationDependencies) AddBookHandler(w http.ResponseWriter, r *http.
 		Description:     incomingData.Description,
 		AverageRating:   incomingData.AverageRating,
 	}
+	//logs to check data
+	logger.Info("Book Details", "Title", book.Title)
+	logger.Info("Book Details", "Authors", incomingData.Authors)
+	logger.Info("Book Details", "ISBN", incomingData.ISBN)
+	logger.Info("Book Details", "Publication Date", incomingData.PublicationDate)
+	logger.Info("Book Details", "Genre", incomingData.Genre)
+	logger.Info("Book Details", "Description", incomingData.Description)
+	logger.Info("Book Details", "Average Rating", incomingData.AverageRating)
 	//call the validator to verify all fields match their specs
 	v := validator.New()
 	data.ValidateBook(v, a.BookModel, book)

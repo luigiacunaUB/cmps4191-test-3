@@ -55,7 +55,7 @@ func ValidateBook(v *validator.Validator, b BookModel, book *Book) {
 
 	//Description Checks
 	v.Check(book.Description != "", "Description", "Must not be Empty")
-	v.Check(len(book.Genre) <= 100, "Description", "Must not be more than 100 bytes long")
+	v.Check(len(book.Description) <= 100, "Description", "Must not be more than 100 bytes long")
 
 	//Rating Check
 	v.Check(book.AverageRating >= 1 && book.AverageRating <= 5, "Ratings", "Ratings must between 1 and 5")

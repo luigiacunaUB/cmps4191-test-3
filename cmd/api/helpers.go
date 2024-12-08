@@ -39,7 +39,6 @@ func (a *applicationDependencies) writeJSON(w http.ResponseWriter, status int, d
 }
 
 func (a *applicationDependencies) readJSON(w http.ResponseWriter, r *http.Request, destination any) error {
-
 	maxBytes := 256_000
 	r.Body = http.MaxBytesReader(w, r.Body, int64(maxBytes))
 	dec := json.NewDecoder(r.Body)
@@ -120,16 +119,15 @@ func (a *applicationDependencies) getSingleIntegerParameter(queryParameters url.
 }
 
 func (a *applicationDependencies) background(fn func()) {
-    a.wg.Add(1) 
-    go func() {
-        defer a.wg.Done()     
-        defer func() {
-           err := recover() 
-           if err != nil {
-                a.logger.Error(fmt.Sprintf("%v", err))
-            }
-        }()
-       fn()     
-   }()
+	a.wg.Add(1)
+	go func() {
+		defer a.wg.Done()
+		defer func() {
+			err := recover()
+			if err != nil {
+				a.logger.Error(fmt.Sprintf("%v", err))
+			}
+		}()
+		fn()
+	}()
 }
-
