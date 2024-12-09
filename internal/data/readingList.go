@@ -50,89 +50,203 @@ func stringInSlice(value string, list []string) bool {
 }
 
 func (rl ReadingListModel) AddReadingListToDatabase(list ReadingList) (ReadingList, error) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	logger.Info("Inside AddReadingList SQL")
-	logger.Info("Error 1")
-	// Start a database transaction
+	// Begin a transaction
 	tx, err := rl.DB.Begin()
 	if err != nil {
-		return ReadingList{}, err
+		return list, err
 	}
-	logger.Info("Error 2")
 
-	defer func() {
-		if p := recover(); p != nil {
-			tx.Rollback()
-			panic(p) // re-throw panic after rollback
-		} else if err != nil {
-			tx.Rollback() // rollback transaction on error
-		} else {
-			err = tx.Commit() // commit transaction
-		}
-	}()
-	logger.Info("Error 3")
-	logger.Info("List", "Name", list.ReadListName)
-	logger.Info("List", "Description", list.Description)
-	logger.Info("List", "Created by User", list.CreatedBy)
-	logger.Info("List", "Status", list.Status)
-	logger.Info("List", "Books", list.Books)
-	// Insert into `reading_lists` table
-	var readingListID int
+	defer tx.Rollback() // Rollback in case of an error
+
+	// Insert into reading_lists
 	query := `
-		INSERT INTO reading_lists (name, description, created_by, status)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id
-	`
-	err = tx.QueryRow(query, list.ReadListName, list.Description, list.CreatedBy, list.Status).Scan(&readingListID)
+		 INSERT INTO reading_lists (name, description, created_by, status)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id
+	 `
+	var id int64
+	err = tx.QueryRow(query, list.ReadListName, list.Description, list.CreatedBy, list.Status).Scan(&id)
 	if err != nil {
-		return ReadingList{}, err
+		return list, err
 	}
 
-	// Insert into `reading_list_books` table
-	booksQuery := `
-		INSERT INTO reading_list_books (reading_list_id, book_id)
-		VALUES ($1, $2)
-	`
-	logger.Info("Error 4")
+	// Insert into reading_list_books
 	for _, bookID := range list.Books {
-		_, err = tx.Exec(booksQuery, readingListID, bookID)
+		query = `
+			 INSERT INTO reading_list_books (reading_list_id, book_id)
+			 VALUES ($1, $2)
+		 `
+		_, err = tx.Exec(query, id, bookID)
 		if err != nil {
-			return ReadingList{}, err
+			return list, err
 		}
 	}
-	logger.Info("Error 5")
 
-	// Fetch all reading lists including the new one
+	// Commit the transaction
+	err = tx.Commit()
+	if err != nil {
+		return list, err
+	}
+
+	// Return the updated ReadingList
+	list.ID = id
+	return list, nil
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------------------------------------------
+func (m *ReadingListModel) DeleteReadingList(readingListID int64) error {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	logger.Info("Inside DELETEREADINGLISTHANDLER SQL")
+	logger.Info("ID to be deleted in SQL func: ", readingListID)
+	// Delete the reading list
+	query := `
+        DELETE FROM reading_lists
+        WHERE id = $1
+    `
+	result, err := m.DB.Exec(query, readingListID)
+	if err != nil {
+		return err
+	}
+
+	// Check if any row was actually deleted
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return err
+	}
+
+	return nil
+}
+
+// -------------------------------------------------------------------------------------------------------------------------------------------------------------------
+func (m *ReadingListModel) GetAllReadingLists() ([]ReadingList, error) {
+	// Query to fetch all reading lists and their associated book IDs
+	query := `
+        SELECT r.id, r.name, r.description, r.created_by, r.status, rb.book_id
+        FROM reading_lists r
+        LEFT JOIN reading_list_books rb ON r.id = rb.reading_list_id
+        ORDER BY r.id ASC
+    `
+	rows, err := m.DB.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Slice to hold the reading lists
 	var readingLists []ReadingList
-	fetchQuery := `
-		SELECT rl.id, rl.name, rl.description, rl.created_by, rl.status, 
-		       ARRAY_AGG(rlb.book_id) AS books
-		FROM reading_lists rl
-		LEFT JOIN reading_list_books rlb ON rl.id = rlb.reading_list_id
-		GROUP BY rl.id
-	`
-	rows, err := tx.Query(fetchQuery)
+	var currentList *ReadingList
+
+	// Loop through the result set and populate the slice
+	for rows.Next() {
+		var list ReadingList
+		var bookID *int
+		err := rows.Scan(&list.ID, &list.ReadListName, &list.Description, &list.CreatedBy, &list.Status, &bookID)
+		if err != nil {
+			return nil, err
+		}
+
+		// If a new reading list is encountered, add it to the slice
+		if currentList == nil || currentList.ID != list.ID {
+			// If there is a previous list, append it to the result slice
+			if currentList != nil {
+				readingLists = append(readingLists, *currentList)
+			}
+			// Start a new reading list
+			currentList = &list
+			currentList.Books = []int{}
+		}
+
+		// Append the book ID to the current reading list
+		if bookID != nil {
+			currentList.Books = append(currentList.Books, *bookID)
+		}
+	}
+
+	// Append the last reading list if present
+	if currentList != nil {
+		readingLists = append(readingLists, *currentList)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return readingLists, nil
+}
+
+// -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+func (m *ReadingListModel) GetReadingListByID(id int64) (ReadingList, error) {
+	// Query to fetch the reading list with its associated book IDs by reading list ID
+	query := `
+        SELECT r.id, r.name, r.description, r.created_by, r.status, rb.book_id
+        FROM reading_lists r
+        LEFT JOIN reading_list_books rb ON r.id = rb.reading_list_id
+        WHERE r.id = $1
+        ORDER BY r.id ASC
+    `
+	rows, err := m.DB.Query(query, id)
 	if err != nil {
 		return ReadingList{}, err
 	}
 	defer rows.Close()
-	logger.Info("Error 6")
-	for rows.Next() {
-		var fetchedList ReadingList
-		var books []int
 
-		err := rows.Scan(&fetchedList.ID, &fetchedList.ReadListName, &fetchedList.Description,
-			&fetchedList.CreatedBy, &fetchedList.Status, &books)
+	// Initialize a variable to store the reading list
+	var readingList ReadingList
+	var currentList *ReadingList
+	var bookID *int
+
+	// Loop through the result set and populate the reading list
+	for rows.Next() {
+		err := rows.Scan(&readingList.ID, &readingList.ReadListName, &readingList.Description, &readingList.CreatedBy, &readingList.Status, &bookID)
 		if err != nil {
 			return ReadingList{}, err
 		}
-		fetchedList.Books = books
-		readingLists = append(readingLists, fetchedList)
+
+		// If it's the first row, initialize the book list
+		if currentList == nil {
+			currentList = &readingList
+			currentList.Books = []int{}
+		}
+
+		// Append the book ID to the current reading list if it's not NULL
+		if bookID != nil {
+			currentList.Books = append(currentList.Books, *bookID)
+		}
 	}
 
 	if err = rows.Err(); err != nil {
 		return ReadingList{}, err
 	}
-	logger.Info("Error 6")
-	return ReadingList{}, nil
+
+	// If no reading list was found, return an error
+	if currentList == nil {
+		return ReadingList{}, err
+	}
+
+	return *currentList, nil
+}
+
+// -------------------------------------------------------------------------------------------------------------------------------------------------------------
+func (m *ReadingListModel) AddBookToReadingList(readingListID, bookID int64) error {
+	// Query to insert a new book into the reading_list_books table
+	query := `
+		INSERT INTO reading_list_books (reading_list_id, book_id)
+		VALUES ($1, $2)
+	`
+	_, err := m.DB.Exec(query, readingListID, bookID)
+	return err
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------------------------------------------
+func (m *ReadingListModel) DeleteBookFromReadingList(readingListID, bookID int64) error {
+	// Query to delete a book from the reading_list_books table
+	query := `
+		DELETE FROM reading_list_books
+		WHERE reading_list_id = $1 AND book_id = $2
+	`
+	_, err := m.DB.Exec(query, readingListID, bookID)
+	return err
 }
