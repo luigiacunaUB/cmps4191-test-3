@@ -250,3 +250,17 @@ func (m *ReadingListModel) DeleteBookFromReadingList(readingListID, bookID int64
 	_, err := m.DB.Exec(query, readingListID, bookID)
 	return err
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+func (m *ReadingListModel) UpdateReadingListInfo(list ReadingList) error {
+	query := `
+		UPDATE reading_lists
+		SET
+			name = COALESCE(NULLIF($1, ''), name),
+			description = COALESCE(NULLIF($2, ''), description),
+			status = COALESCE(NULLIF($3, ''), status)
+		WHERE id = $4
+	`
+	_, err := m.DB.Exec(query, list.ReadListName, list.Description, list.Status, list.ID)
+	return err
+}

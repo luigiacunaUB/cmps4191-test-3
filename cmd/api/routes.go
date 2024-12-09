@@ -34,6 +34,7 @@ func (a *applicationDependencies) routes() http.Handler {
 	router.HandlerFunc(http.MethodGet, "/api/v1/lists/:id", a.requirePermission("books:read", a.GetReadingListHandler))                      //view specfic readling list
 	router.HandlerFunc(http.MethodPost, "/api/v1/lists/:id/books", a.requirePermission("books:write", a.AddBookToReadingListHandler))        //add a book to a specfic reading list
 	router.HandlerFunc(http.MethodDelete, "/api/v1/lists/:id/books", a.requirePermission("books:write", a.DeleteBookFromReadingListHandler)) //delete a book to a specfic reading list
+	router.HandlerFunc(http.MethodPut, "/api/v1/lists/:id", a.requirePermission("books:write", a.UpdateReadingListInfoHandler))              //update a reading list
 	//--------------------------------------REVIEWS-----------------------------------------------------------------------------------------------------------------------------
 	router.HandlerFunc(http.MethodPost, "/api/v1/books/:id/reviews", a.requirePermission("books:write", a.AddBookReviewHandler))     //add a review
 	router.HandlerFunc(http.MethodPut, "/api//v1/reviews/:id", a.requirePermission("books:write", a.UpdateBookReviewHandler))        //update review

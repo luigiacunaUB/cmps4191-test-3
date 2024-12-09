@@ -215,3 +215,49 @@ func (a *applicationDependencies) DeleteBookFromReadingListHandler(w http.Respon
 		a.serverErrorResponse(w, r, err)
 	}
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+func (a *applicationDependencies) UpdateReadingListInfoHandler(w http.ResponseWriter, r *http.Request) {
+	// Extract the reading list ID from the URL
+	id, err := a.readIDParam(r)
+	if err != nil {
+		a.notFoundResponse(w, r)
+		return
+	}
+
+	// Parse the request body
+	var incomingData struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Status      string `json:"status"`
+	}
+	err = a.readJSON(w, r, &incomingData)
+	if err != nil {
+		a.badRequestResponse(w, r, err)
+		return
+	}
+
+	// Construct the ReadingList struct with the updates
+	list := &data.ReadingList{
+		ID:           id,
+		ReadListName: incomingData.Name,
+		Description:  incomingData.Description,
+		Status:       incomingData.Status,
+	}
+
+	// Update the reading list info
+	err = a.ReadingListModel.UpdateReadingListInfo(*list)
+	if err != nil {
+		a.serverErrorResponse(w, r, err)
+		return
+	}
+
+	// Respond with a success message
+	data := envelope{
+		"message": "Reading list successfully updated",
+	}
+	err = a.writeJSON(w, http.StatusOK, data, nil)
+	if err != nil {
+		a.serverErrorResponse(w, r, err)
+	}
+}
